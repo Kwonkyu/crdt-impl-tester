@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRDT Counter</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+
+      .counter {
+        margin-bottom: 20px;
+      }
+
+      .counter-value {
+        font-size: 1.5em;
+        margin-right: 10px;
+      }
+
+      button {
+        padding: 5px 10px;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+
+  <body style="background-color: black; color: wheat">
+    <h1>CRDT Grow-Only Counter</h1>
+    <div style="display: flex; justify-content: space-around">
+      <div id="counters" style="width: 50%">
+        <!-- Counter elements will be injected here -->
+      </div>
+
+      <div id="log-container" style="margin-top: 20px; width: 50%">
+        <h2>Logs</h2>
+        <textarea
+          id="log-box"
+          style="width: 100%; height: 80%"
+          readonly
+        ></textarea>
+
+        <div>
+          <button onClick="clearLogs();">CLEAR LOGS</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const counters = {}; // Store counters by their IDs
+      for (let i = 1; i <= 10; i++) {
+        counters[i] = 0; // Initialize counters
+      }
+      renderCounters();
+
+      function clearLogs() {
+        const logBox = document.getElementById("log-box");
+        logBox.value = ""; // Clear the log box
+      }
+
+      // Function to render counters
+      function renderCounters() {
+        const countersDiv = document.getElementById("counters");
+        countersDiv.innerHTML = "";
+        for (const [id, value] of Object.entries(counters)) {
+          const counterDiv = document.createElement("div");
+          counterDiv.className = "counter";
+          counterDiv.innerHTML = `
+                    <span class="counter-value">Counter ${id}: ${value}</span>
+                    <button onclick="incrementCounter('${id}')">Increase</button>
+                `;
+          countersDiv.appendChild(counterDiv);
+        }
+      }
+
+      // Function to increment a counter
+      function incrementCounter(id) {
+        counters[id] = (counters[id] || 0) + 1;
+        const concatenatedValues = Object.values(counters).join("|");
+        logMessage("Concatenated Values:" + concatenatedValues);
+        dataWS.send(concatenatedValues);
+        renderCounters();
+      }
+
+      function logMessage(message) {
+        const logBox = document.getElementById("log-box");
+        logBox.value += message + "\n";
+        logBox.scrollTop = logBox.scrollHeight; // Auto-scroll to the bottom
+      }
+
+      const lobbyWS = new WebSocket("ws://localhost:8080/ws/counter/join");
+      // Update WebSocket handlers to log messages
+      lobbyWS.onmessage = (event) => {
+        event.data
+          .arrayBuffer()
+          .then((buffer) => new Uint8Array(buffer))
+          .then((data) => {
+            logMessage(`Received INITIAL: ${data}`);
+            let offset = 0;
+            const intValues = [];
+            const dataView = new DataView(data.buffer);
+            while (offset < data.length) {
+              const int32 = dataView.getInt32(offset, false);
+              intValues.push(int32);
+              offset += 4;
+            }
+            for (let i = 0; i < intValues.length; i++) {
+              counters[i + 1] = intValues[i];
+            }
+            renderCounters();
+          });
+      };
+
+      lobbyWS.onopen = () => {
+        logMessage(`Joined lobby.`);
+      };
+
+      lobbyWS.onerror = (error) => {
+        logMessage(`WebSocket error: ${error.message}`);
+        console.error("WebSocket error:", error);
+      };
+
+      lobbyWS.onclose = () => {
+        logMessage("WebSocket connection closed");
+        console.warn("WebSocket connection closed");
+      };
+
+      const dataWS = new WebSocket("ws://localhost:8080/ws/counter/propagate");
+      dataWS.onmessage = (event) => {
+        event.data
+          .arrayBuffer()
+          .then((buffer) => new Uint8Array(buffer))
+          .then((data) => {
+            logMessage(`Received: ${data}`);
+            let offset = 0;
+            const intValues = [];
+            const dataView = new DataView(data.buffer);
+            while (offset < data.length) {
+              const int32 = dataView.getInt32(offset, false);
+              intValues.push(int32);
+              offset += 4;
+            }
+            for (let i = 0; i < intValues.length; i++) {
+              counters[i + 1] = intValues[i];
+            }
+            renderCounters();
+          });
+      };
+    </script>
+  </body>
+</html>
