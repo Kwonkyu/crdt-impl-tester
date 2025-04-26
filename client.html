@@ -28,13 +28,14 @@
 
   <body style="background-color: black; color: wheat">
     <h1>CRDT Grow-Only Counter</h1>
-    <div style="display: flex; justify-content: space-around">
+    <div style="display: flex; justify-content: space-around;">
       <div id="counters" style="width: 50%">
         <!-- Counter elements will be injected here -->
       </div>
 
-      <div id="log-container" style="margin-top: 20px; width: 50%">
-        <h2>Logs</h2>
+      <div id="log-container" style="width: 50%">
+        <span style="font-weight: 500; font-size: 1.5em;">Logs</span>
+        <hr />
         <textarea
           id="log-box"
           style="width: 100%; height: 80%"
@@ -96,7 +97,6 @@
           .arrayBuffer()
           .then((buffer) => new Uint8Array(buffer))
           .then((data) => {
-            logMessage(`Received INITIAL: ${data}`);
             let offset = 0;
             const intValues = [];
             const dataView = new DataView(data.buffer);
@@ -108,6 +108,7 @@
             for (let i = 0; i < intValues.length; i++) {
               counters[i + 1] = intValues[i];
             }
+            logMessage(`Received: ${intValues}`);
             renderCounters();
           });
       };
